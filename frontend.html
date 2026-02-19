@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SXA — Sport eXperience Analyzer</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- React 18 + Babel (dev CDN) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- MediaPipe Pose -->
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.min.js"></script>
+
+  <style>
+    /* ─────────────────── DESIGN TOKENS ─────────────────── */
+    :root {
+      --primary:      #00E5FF;
+      --primary-dim:  #00B8CC;
+      --accent:       #FF3D71;
+      --accent2:      #AAFF00;
+      --bg:           #080C14;
+      --bg-2:         #0E1420;
+      --bg-3:         #141C2E;
+      --bg-card:      #111828;
+      --border:       rgba(255,255,255,0.07);
+      --border-bright:rgba(0,229,255,0.25);
+      --text:         #E8EDF5;
+      --text-dim:     #6B7A96;
+      --text-muted:   #3D4A62;
+      --success:      #AAFF00;
+      --warning:      #FFB800;
+      --error:        #FF3D71;
+      --font-display: 'Bebas Neue', sans-serif;
+      --font-body:    'DM Sans', sans-serif;
+      --font-mono:    'JetBrains Mono', monospace;
+    }
+
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* subtle grid backdrop */
+    body::before {
+      content:'';
+      position:fixed; inset:0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px);
+      background-size:48px 48px;
+      pointer-events:none; z-index:0;
+    }
+    body::after {
+      content:'';
+      position:fixed; top:-200px; right:-200px;
+      width:600px; height:600px;
+      background:radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 70%);
+      pointer-events:none; z-index:0;
+    }
+
+    /* ─────────────────── LAYOUT ─────────────────── */
+    .app-container {
+      position:relative; z-index:1;
+      max-width:1440px; margin:0 auto;
+      padding:24px 28px;
+    }
+
+    /* ─────────────────── HEADER ─────────────────── */
+    .header {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:20px 32px; margin-bottom:28px;
+      background:rgba(14,20,32,0.8);
+      backdrop-filter:blur(20px);
+      border:1px solid var(--border); border-radius:16px;
+      position:sticky; top:16px; z-index:100;
+    }
+    .logo {
+      font-family:var(--font-display); font-size:38px; letter-spacing:3px;
+      background:linear-gradient(120deg, var(--primary) 0%, #AAFF00 100%);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+      background-clip:text; line-height:1;
+    }
+    .tagline {
+      font-size:11px; letter-spacing:2.5px; text-transform:uppercase;
+      color:var(--text-dim); margin-top:4px; font-weight:500;
+    }
+    .header-badge {
+      display:flex; align-items:center; gap:8px;
+      background:rgba(0,229,255,0.08); border:1px solid var(--border-bright);
+      border-radius:100px; padding:8px 16px;
+    }
+    .header-badge-dot {
+      width:7px; height:7px; border-radius:50%;
+      background:var(--primary); box-shadow:0 0 8px var(--primary);
+      animation:pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot {
+      0%,100% { opacity:1; transform:scale(1); }
+      50%      { opacity:0.5; transform:scale(0.8); }
+    }
+    .header-badge-text {
+      font-size:12px; font-weight:600; color:var(--primary);
+      letter-spacing:1px; font-family:var(--font-mono);
+    }
+
+    /* ─────────────────── NAV TABS ─────────────────── */
+    .nav-tabs {
+      display:flex; gap:4px;
+      background:var(--bg-2); border:1px solid var(--border);
+      padding:6px; border-radius:14px; margin-bottom:28px;
+      flex-wrap:wrap; overflow-x:auto;
+    }
+    .nav-tab {
+      padding:10px 20px; border:none; background:transparent;
+      color:var(--text-dim); cursor:pointer; border-radius:9px;
+      font-weight:600; font-size:13px; transition:all 0.2s ease;
+      font-family:var(--font-body); letter-spacing:0.3px; white-space:nowrap;
+    }
+    .nav-tab:hover:not(:disabled) { background:rgba(255,255,255,0.06); color:var(--text); }
+    .nav-tab.active {
+      background:var(--primary); color:var(--bg);
+      box-shadow:0 0 20px rgba(0,229,255,0.3), 0 4px 12px rgba(0,0,0,0.3);
+      font-weight:700;
+    }
+    .nav-tab:disabled { opacity:0.3; cursor:not-allowed; }
+
+    /* ─────────────────── CONTENT CARD ─────────────────── */
+    .content-card {
+      background:var(--bg-card); border:1px solid var(--border);
+      border-radius:20px; padding:36px;
+      position:relative; overflow:hidden;
+    }
+    .content-card::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg, transparent, var(--primary), transparent);
+      opacity:0.4;
+    }
+
+    /* ─────────────────── MODULE TITLES ─────────────────── */
+    .module-title {
+      font-family:var(--font-display); font-size:36px;
+      letter-spacing:2px; color:var(--text);
+      margin-bottom:6px; line-height:1.1;
+    }
+    .module-subtitle {
+      color:var(--text-dim); font-size:14px;
+      margin-bottom:36px; letter-spacing:0.3px;
+    }
+
+    /* ─────────────────── UPLOAD ZONE ─────────────────── */
+    .upload-zone {
+      border:2px dashed rgba(0,229,255,0.2);
+      border-radius:16px; padding:56px 48px;
+      text-align:center; background:rgba(0,229,255,0.02);
+      cursor:pointer; transition:all 0.3s ease;
+      margin-bottom:24px; position:relative;
+    }
+    .upload-zone:hover { border-color:rgba(0,229,255,0.5); background:rgba(0,229,255,0.04); }
+    .upload-icon { font-size:52px; margin-bottom:20px; display:block; filter:drop-shadow(0 0 16px rgba(0,229,255,0.3)); }
+    .upload-text { font-size:18px; color:var(--text); font-weight:600; margin-bottom:8px; }
+    .upload-hint { font-size:13px; color:var(--text-dim); font-family:var(--font-mono); }
+
+    /* ─────────────────── BUTTONS ─────────────────── */
+    .button-group { display:flex; gap:12px; justify-content:center; margin-top:24px; flex-wrap:wrap; }
+    .btn {
+      padding:13px 32px; border:none; border-radius:10px;
+      font-weight:700; font-size:13px; cursor:pointer;
+      transition:all 0.25s ease; display:inline-flex;
+      align-items:center; gap:8px; letter-spacing:0.5px;
+      font-family:var(--font-body);
+    }
+    .btn-primary {
+      background:var(--primary); color:var(--bg);
+      box-shadow:0 0 24px rgba(0,229,255,0.25), 0 4px 16px rgba(0,0,0,0.3);
+    }
+    .btn-primary:hover:not(:disabled) {
+      background:#1AECFF;
+      box-shadow:0 0 36px rgba(0,229,255,0.4), 0 6px 20px rgba(0,0,0,0.4);
+      transform:translateY(-2px);
+    }
+    .btn-primary:disabled { opacity:0.35; cursor:not-allowed; transform:none; box-shadow:none; }
+    .btn-secondary { background:transparent; color:var(--primary); border:1.5px solid rgba(0,229,255,0.4); }
+    .btn-secondary:hover { background:rgba(0,229,255,0.06); border-color:var(--primary); }
+
+    /* ─────────────────── ERROR / STATUS ─────────────────── */
+    .error-message {
+      background:rgba(255,61,113,0.08); border:1px solid rgba(255,61,113,0.3);
+      border-radius:14px; padding:28px; margin:24px 0; text-align:center;
+    }
+    .error-icon { font-size:44px; margin-bottom:14px; display:block; }
+    .error-title { font-family:var(--font-display); font-size:24px; letter-spacing:1px; color:var(--error); margin-bottom:8px; }
+    .error-text  { color:var(--text-dim); font-size:15px; line-height:1.6; }
+
+    .status-badge {
+      display:inline-flex; align-items:center; gap:8px;
+      padding:7px 16px; border-radius:100px;
+      font-size:12px; font-weight:700; margin-bottom:20px;
+      letter-spacing:1px; font-family:var(--font-mono);
+    }
+    .status-analyzing { background:rgba(255,184,0,0.1); border:1px solid rgba(255,184,0,0.3); color:var(--warning); }
+    .status-success   { background:rgba(170,255,0,0.1); border:1px solid rgba(170,255,0,0.3); color:var(--success); }
+
+    /* ─────────────────── METRIC CARDS ─────────────────── */
+    .metric-card {
+      background:var(--bg-2); border:1px solid var(--border);
+      border-radius:14px; padding:24px; transition:border-color 0.2s;
+    }
+    .metric-card:hover { border-color:var(--border-bright); }
+    .metric-label { font-size:11px; color:var(--text-dim); margin-bottom:12px; letter-spacing:2px; text-transform:uppercase; font-weight:600; }
+    .metric-value { font-family:var(--font-display); font-size:44px; letter-spacing:1px; color:var(--primary); margin-bottom:4px; line-height:1; }
+
+    /* ─────────────────── INSIGHT CARDS ─────────────────── */
+    .insight-card {
+      padding:20px; border-radius:12px; display:flex; gap:16px;
+      margin-bottom:10px; border:1px solid var(--border);
+      background:var(--bg-2); transition:all 0.2s;
+    }
+    .insight-card:hover { border-color:var(--border-bright); transform:translateX(3px); }
+    .insight-icon    { font-size:28px; flex-shrink:0; }
+    .insight-content { flex:1; }
+    .insight-title   { font-weight:700; font-size:14px; margin-bottom:5px; color:var(--text); letter-spacing:0.2px; }
+    .insight-text    { font-size:13px; color:var(--text-dim); line-height:1.65; }
+
+    /* ─────────────────── PROGRESS BARS ─────────────────── */
+    .progress-bar  { height:6px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden; }
+    .progress-fill {
+      height:100%;
+      background:linear-gradient(90deg, var(--primary-dim) 0%, var(--primary) 100%);
+      transition:width 1.2s cubic-bezier(0.22,1,0.36,1);
+      border-radius:3px; box-shadow:0 0 8px rgba(0,229,255,0.4);
+    }
+
+    /* ─────────────────── VIDEO / CANVAS ─────────────────── */
+    .video-container {
+      position:relative; margin-bottom:24px; border-radius:14px;
+      overflow:hidden; background:#000; border:1px solid var(--border);
+    }
+    .video-player { width:100%; display:block; max-height:600px; }
+    .canvas-overlay { position:absolute; top:0; left:0; pointer-events:none; }
+    .processing-overlay {
+      position:absolute; inset:0;
+      background:rgba(8,12,20,0.75); backdrop-filter:blur(4px);
+      display:flex; align-items:center; justify-content:center; color:white;
+    }
+
+    /* spinner */
+    .spinner {
+      border:3px solid rgba(0,229,255,0.15);
+      border-top:3px solid var(--primary);
+      border-radius:50%; width:38px; height:38px;
+      animation:spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ─────────────────── FORMS ─────────────────── */
+    .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:24px; }
+    .form-group { display:flex; flex-direction:column; }
+    .form-label { font-size:11px; font-weight:700; color:var(--text-dim); margin-bottom:8px; letter-spacing:2px; text-transform:uppercase; }
+    .form-input, .form-select {
+      padding:12px 16px; border:1.5px solid var(--border);
+      border-radius:10px; font-size:14px; font-family:var(--font-body);
+      outline:none; transition:all 0.2s;
+      background:var(--bg-2); color:var(--text);
+    }
+    .form-input:focus, .form-select:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(0,229,255,0.08); }
+    .form-select { cursor:pointer; }
+    .form-select option { background:var(--bg-3); color:var(--text); }
+
+    /* ─────────────────── BMI ─────────────────── */
+    .bmi-gauge {
+      position:relative; height:10px; border-radius:5px;
+      background:linear-gradient(to right, #3B82F6 0%, #10B981 28%, #FFB800 65%, #FF3D71 100%);
+      margin:10px 0 6px; overflow:visible;
+    }
+    .bmi-needle {
+      position:absolute; top:-5px; transform:translateX(-50%);
+      width:4px; height:20px; background:white; border-radius:2px;
+      box-shadow:0 0 8px rgba(255,255,255,0.6);
+    }
+
+    /* ─────────────────── DIET / INJURY ─────────────────── */
+    .diet-card { background:var(--bg-2); border-radius:12px; padding:18px; border:1px solid var(--border); transition:border-color 0.2s; }
+    .diet-card:hover { border-color:var(--border-bright); }
+    .diet-pill { display:inline-block; padding:3px 12px; border-radius:100px; font-size:11px; font-weight:700; white-space:nowrap; flex-shrink:0; letter-spacing:0.5px; font-family:var(--font-mono); }
+    .pill-protein { background:rgba(59,130,246,0.15);  color:#60A5FA; border:1px solid rgba(59,130,246,0.25); }
+    .pill-carb    { background:rgba(255,184,0,0.12);    color:#FFB800; border:1px solid rgba(255,184,0,0.25); }
+    .pill-fat     { background:rgba(244,114,182,0.12);  color:#F472B6; border:1px solid rgba(244,114,182,0.25); }
+    .pill-micro   { background:rgba(170,255,0,0.1);     color:var(--success); border:1px solid rgba(170,255,0,0.25); }
+
+    .injury-card { display:flex; gap:16px; padding:20px; border-radius:14px; border:1px solid var(--border); background:var(--bg-2); margin-bottom:12px; transition:border-color 0.2s; }
+    .injury-high   { border-left:4px solid #EF4444; background:rgba(239,68,68,0.05); }
+    .injury-medium { border-left:4px solid #F59E0B; background:rgba(245,158,11,0.05); }
+    .injury-low    { border-left:4px solid #10B981; background:rgba(16,185,129,0.05); }
+
+    /* ─────────────────── GRIDS ─────────────────── */
+    .grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin:24px 0; }
+    .grid-3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin:24px 0; }
+
+    .section-divider { height:1px; background:linear-gradient(90deg,transparent,var(--border),transparent); margin:32px 0; }
+
+    /* ─────────────────── SCROLLBAR ─────────────────── */
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:var(--bg-2); }
+    ::-webkit-scrollbar-thumb { background:var(--bg-3); border-radius:3px; }
+    ::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
+
+    /* ─────────────────── RESPONSIVE ─────────────────── */
+    @media (max-width:768px) {
+      .header { flex-direction:column; text-align:center; gap:14px; padding:16px 20px; position:relative; top:0; margin-bottom:18px; }
+      .app-container { padding:14px 16px; }
+      .content-card  { padding:22px 18px; }
+      .nav-tabs { justify-content:flex-start; }
+      .grid-2, .grid-3 { grid-template-columns:1fr; }
+      .module-title { font-size:28px; }
+    }
+
+    /* ─────────────────── PRINT ─────────────────── */
+    @media print {
+      body { background:white !important; color:black !important; }
+      .header, .nav-tabs, .button-group, .btn, video, canvas { display:none !important; }
+      .content-card { box-shadow:none !important; border:none !important; background:white !important; color:black !important; }
+      .metric-card, .insight-card { background:#f5f5f5 !important; color:black !important; border:1px solid #ddd !important; }
+      .metric-value  { color:#0099bb !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    /* ═══════════════════════════════════════════════════════
+       SXA FRONTEND — Sport eXperience Analyzer
+       Separated from the monolith for maintainability.
+
+       This file is the complete client-side React app.
+       To connect to the backend API, set API_BASE below.
+    ═══════════════════════════════════════════════════════ */
+
+    const { useState, useRef, useEffect, useCallback } = React;
+
+    /* ── Config ─────────────────────────────────────────── */
+    const API_BASE = 'http://localhost:4000/api'; // ← point to your backend
+
+    /* ── Sport Biomechanics Patterns ───────────────────── */
+    const SPORT_PATTERNS = {
+      'long-jump':  { name:'Long Jump',             emoji:'🏃‍♂️', weights:{ form:0.30, power:0.20, consistency:0.20, balance:0.15, timing:0.15 }, keyPoints:{ ankleKneeAngle:{min:120,max:180,optimal:160}, hipAngle:{min:130,max:180,optimal:165}, armSwing:{min:100,max:180,optimal:150}, speedRequirement:3.0 }},
+      'high-jump':  { name:'High Jump',             emoji:'🤸',   weights:{ form:0.35, power:0.20, consistency:0.18, balance:0.12, timing:0.15 }, keyPoints:{ ankleKneeAngle:{min:110,max:180,optimal:155}, hipAngle:{min:130,max:185,optimal:165}, armSwing:{min:70,max:180,optimal:140}, speedRequirement:2.5 }},
+      sprinting:    { name:'Sprinting',             emoji:'🏃‍♀️', weights:{ form:0.25, power:0.25, consistency:0.25, balance:0.10, timing:0.15 }, keyPoints:{ ankleKneeAngle:{min:60,max:130,optimal:90},  hipAngle:{min:155,max:195,optimal:180}, armSwing:{min:60,max:130,optimal:90},  speedRequirement:3.5 }},
+      basketball:   { name:'Basketball Shooting',   emoji:'🏀',   weights:{ form:0.35, power:0.15, consistency:0.25, balance:0.15, timing:0.10 }, keyPoints:{ ankleKneeAngle:{min:95,max:160,optimal:130},  hipAngle:{min:125,max:180,optimal:160}, armSwing:{min:70,max:140,optimal:100}, speedRequirement:1.2 }},
+      soccer:       { name:'Soccer Kicking',        emoji:'⚽',   weights:{ form:0.30, power:0.20, consistency:0.20, balance:0.15, timing:0.15 }, keyPoints:{ ankleKneeAngle:{min:85,max:160,optimal:125},  hipAngle:{min:115,max:175,optimal:150}, armSwing:{min:40,max:110,optimal:70},  speedRequirement:1.8 }},
+      tennis:       { name:'Tennis Serve',          emoji:'🎾',   weights:{ form:0.32, power:0.18, consistency:0.22, balance:0.13, timing:0.15 }, keyPoints:{ ankleKneeAngle:{min:110,max:175,optimal:145}, hipAngle:{min:135,max:190,optimal:170}, armSwing:{min:120,max:180,optimal:160},speedRequirement:2.0 }},
+      running:      { name:'Distance Running',      emoji:'🏃',   weights:{ form:0.25, power:0.20, consistency:0.30, balance:0.15, timing:0.10 }, keyPoints:{ ankleKneeAngle:{min:70,max:140,optimal:100},  hipAngle:{min:160,max:195,optimal:180}, armSwing:{min:55,max:115,optimal:85},  speedRequirement:2.5 }},
+      golf:         { name:'Golf Swing',            emoji:'⛳',   weights:{ form:0.35, power:0.20, consistency:0.25, balance:0.12, timing:0.08 }, keyPoints:{ ankleKneeAngle:{min:120,max:175,optimal:150}, hipAngle:{min:130,max:185,optimal:160}, armSwing:{min:130,max:185,optimal:165},speedRequirement:1.0 }},
+      yoga:         { name:'Yoga',                  emoji:'🧘',   weights:{ form:0.40, power:0.05, consistency:0.20, balance:0.30, timing:0.05 }, keyPoints:{ ankleKneeAngle:{min:80,max:180,optimal:130},  hipAngle:{min:90,max:190,optimal:140},  armSwing:{min:60,max:180,optimal:120}, speedRequirement:0.2 }},
+      jumping:      { name:'Jump Training',         emoji:'⬆️',   weights:{ form:0.25, power:0.35, consistency:0.20, balance:0.12, timing:0.08 }, keyPoints:{ ankleKneeAngle:{min:90,max:170,optimal:130},  hipAngle:{min:120,max:180,optimal:155}, armSwing:{min:80,max:165,optimal:130}, speedRequirement:2.0 }},
+      swimming:     { name:'Swimming',              emoji:'🏊',   weights:{ form:0.35, power:0.20, consistency:0.25, balance:0.10, timing:0.10 }, keyPoints:{ ankleKneeAngle:{min:100,max:180,optimal:150}, hipAngle:{min:140,max:190,optimal:170}, armSwing:{min:110,max:185,optimal:155},speedRequirement:1.5 }},
+      cycling:      { name:'Cycling',               emoji:'🚴',   weights:{ form:0.30, power:0.25, consistency:0.25, balance:0.12, timing:0.08 }, keyPoints:{ ankleKneeAngle:{min:100,max:165,optimal:135}, hipAngle:{min:135,max:180,optimal:160}, armSwing:{min:100,max:155,optimal:130},speedRequirement:2.0 }},
+    };
+
+    /* ── Utility: angle calculation ─────────────────────── */
+    function calcAngle(a, b, c) {
+      const ab = { x: a.x - b.x, y: a.y - b.y };
+      const cb = { x: c.x - b.x, y: c.y - b.y };
+      const dot  = ab.x * cb.x + ab.y * cb.y;
+      const magA = Math.sqrt(ab.x ** 2 + ab.y ** 2);
+      const magB = Math.sqrt(cb.x ** 2 + cb.y ** 2);
+      if (magA === 0 || magB === 0) return 0;
+      return Math.round(Math.acos(Math.max(-1, Math.min(1, dot / (magA * magB)))) * (180 / Math.PI));
+    }
+
+    function scoreColor(v) {
+      return v >= 80 ? '#AAFF00' : v >= 60 ? '#FFB800' : '#FF3D71';
+    }
+
+    /* ── Sport detector (heuristic from landmarks) ──────── */
+    function detectSport(history) {
+      if (history.length < 5) return null;
+      const recent  = history.slice(-10);
+      const avgKnee = recent.reduce((s,f) => s + f.knee, 0) / recent.length;
+      const avgHip  = recent.reduce((s,f) => s + f.hip,  0) / recent.length;
+      const avgArm  = recent.reduce((s,f) => s + f.arm,  0) / recent.length;
+      const speed   = recent.reduce((s,f) => s + f.speed,0) / recent.length;
+
+      for (const [key, pattern] of Object.entries(SPORT_PATTERNS)) {
+        const kp = pattern.keyPoints;
+        const kneeOk  = avgKnee >= kp.ankleKneeAngle.min && avgKnee <= kp.ankleKneeAngle.max;
+        const hipOk   = avgHip  >= kp.hipAngle.min       && avgHip  <= kp.hipAngle.max;
+        const armOk   = avgArm  >= kp.armSwing.min        && avgArm  <= kp.armSwing.max;
+        const speedOk = speed   >= kp.speedRequirement * 0.4;
+        if ([kneeOk, hipOk, armOk, speedOk].filter(Boolean).length >= 3) return pattern.name;
+      }
+      return 'General Athletics';
+    }
+
+    /* ── Score a single frame ───────────────────────────── */
+    function computeScores(metrics, sportKey) {
+      const pattern = SPORT_PATTERNS[sportKey] || SPORT_PATTERNS.running;
+      const kp = pattern.keyPoints;
+      const { weights } = pattern;
+
+      function proximity(val, range) {
+        const mid = (range.min + range.max) / 2;
+        const half = (range.max - range.min) / 2;
+        return Math.max(0, Math.min(100, 100 - Math.abs(val - mid) / half * 35));
+      }
+
+      const form        = Math.round((proximity(metrics.knee, kp.ankleKneeAngle) + proximity(metrics.hip, kp.hipAngle)) / 2);
+      const power       = Math.min(100, Math.round(metrics.speed * 22 + 30));
+      const consistency = Math.min(100, Math.max(0, Math.round(metrics.balance * 0.9 + 10)));
+      const balance     = metrics.balance;
+      const timing      = Math.round(proximity(metrics.arm, kp.armSwing));
+
+      return { form, power, consistency, balance, timing };
+    }
+
+    /* ─────────────────────────────────────────────────────
+       COMPONENTS
+    ───────────────────────────────────────────────────── */
+
+    /* Header */
+    function Header({ liveActive }) {
+      return (
+        <header className="header">
+          <div>
+            <div className="logo">SXA</div>
+            <div className="tagline">Sport eXperience Analyzer</div>
+          </div>
+          <div className="header-badge">
+            <div className="header-badge-dot" style={{ background: liveActive ? '#AAFF00' : 'var(--primary)' }} />
+            <span className="header-badge-text">{liveActive ? 'LIVE' : 'AI READY'}</span>
+          </div>
+        </header>
+      );
+    }
+
+    /* ── Live Detection Module ──────────────────────────── */
+    function LiveDetection() {
+      const videoRef  = useRef(null);
+      const canvasRef = useRef(null);
+      const poseRef   = useRef(null);
+      const animRef   = useRef(null);
+      const streamRef = useRef(null);
+      const historyRef = useRef([]);
+      const lastFrameRef = useRef(0);
+      const frameCountRef = useRef(0);
+      const fpsTimerRef = useRef(null);
+
+      const [status, setStatus]       = useState('idle');   // idle | loading | running | error
+      const [errMsg, setErrMsg]       = useState('');
+      const [liveSport, setLiveSport] = useState(null);
+      const [liveScores, setLiveScores] = useState(null);
+      const [liveMetrics, setLiveMetrics] = useState(null);
+      const [fps, setFps]             = useState(0);
+
+      /* draw skeleton on canvas */
+      function drawSkeleton(landmarks, ctx, W, H) {
+        const CONNECTIONS = [
+          [11,12],[11,13],[13,15],[12,14],[14,16],
+          [11,23],[12,24],[23,24],[23,25],[25,27],
+          [24,26],[26,28],[27,29],[28,30]
+        ];
+        ctx.strokeStyle = 'rgba(0,229,255,0.7)';
+        ctx.lineWidth   = 2.5;
+        CONNECTIONS.forEach(([a, b]) => {
+          const lA = landmarks[a], lB = landmarks[b];
+          if (!lA || !lB) return;
+          ctx.beginPath();
+          ctx.moveTo(lA.x * W, lA.y * H);
+          ctx.lineTo(lB.x * W, lB.y * H);
+          ctx.stroke();
+        });
+        landmarks.forEach((lm, i) => {
+          if (!lm) return;
+          ctx.beginPath();
+          ctx.arc(lm.x * W, lm.y * H, i < 11 ? 3 : 5, 0, 2 * Math.PI);
+          ctx.fillStyle = i < 11 ? 'rgba(170,255,0,0.8)' : 'rgba(0,229,255,0.9)';
+          ctx.fill();
+        });
+      }
+
+      /* MediaPipe result handler */
+      const onResults = useCallback((results) => {
+        const canvas = canvasRef.current;
+        const video  = videoRef.current;
+        if (!canvas || !video) return;
+
+        const W = video.videoWidth  || 640;
+        const H = video.videoHeight || 480;
+        canvas.width  = W;
+        canvas.height = H;
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+        ctx.drawImage(results.image, 0, 0, W, H);
+
+        if (results.poseLandmarks && results.poseLandmarks.length >= 29) {
+          const lm = results.poseLandmarks;
+          drawSkeleton(lm, ctx, W, H);
+
+          const knee = calcAngle(lm[23], lm[25], lm[27]);
+          const hip  = calcAngle(lm[11], lm[23], lm[25]);
+          const arm  = calcAngle(lm[11], lm[13], lm[15]);
+
+          const now = Date.now();
+          const dt  = (now - lastFrameRef.current) / 1000 || 0.033;
+          lastFrameRef.current = now;
+
+          const wristDelta = Math.abs((lm[15].x - lm[16].x));
+          const speed = Math.min(10, wristDelta / Math.max(dt, 0.01));
+
+          const lHip = lm[23], rHip = lm[24];
+          const hipMidX = (lHip.x + rHip.x) / 2;
+          const balance = Math.max(0, Math.min(100, Math.round(100 - Math.abs(hipMidX - 0.5) * 200)));
+
+          const frame = { knee, hip, arm, speed, balance };
+          historyRef.current = [...historyRef.current.slice(-29), frame];
+
+          const sport = detectSport(historyRef.current);
+          setLiveSport(sport);
+
+          const sportKey = Object.keys(SPORT_PATTERNS).find(k => SPORT_PATTERNS[k].name === sport) || 'running';
+          const scores   = computeScores(frame, sportKey);
+          setLiveScores(scores);
+          setLiveMetrics({ knee, hip, arm, speed: speed.toFixed(1), balance });
+
+          frameCountRef.current++;
+        }
+      }, []);
+
+      async function startLive() {
+        setStatus('loading');
+        setErrMsg('');
+        historyRef.current = [];
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:640, height:480 } });
+          streamRef.current = stream;
+          const video = videoRef.current;
+          video.srcObject = stream;
+          await video.play();
+
+          if (!poseRef.current) {
+            const pose = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${f}` });
+            pose.setOptions({ modelComplexity:1, smoothLandmarks:true, enableSegmentation:false, minDetectionConfidence:0.5, minTrackingConfidence:0.5 });
+            pose.onResults(onResults);
+            await pose.initialize();
+            poseRef.current = pose;
+          }
+
+          setStatus('running');
+
+          /* FPS counter */
+          frameCountRef.current = 0;
+          fpsTimerRef.current = setInterval(() => {
+            setFps(frameCountRef.current);
+            frameCountRef.current = 0;
+          }, 1000);
+
+          /* processing loop */
+          async function loop() {
+            if (videoRef.current && poseRef.current && !videoRef.current.paused) {
+              await poseRef.current.send({ image: videoRef.current });
+            }
+            animRef.current = requestAnimationFrame(loop);
+          }
+          animRef.current = requestAnimationFrame(loop);
+        } catch (e) {
+          setStatus('error');
+          setErrMsg(e.message || 'Camera unavailable.');
+        }
+      }
+
+      function stopLive() {
+        cancelAnimationFrame(animRef.current);
+        clearInterval(fpsTimerRef.current);
+        if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+        setStatus('idle');
+        setLiveSport(null);
+        setLiveScores(null);
+        setLiveMetrics(null);
+        setFps(0);
+      }
+
+      useEffect(() => () => stopLive(), []);
+
+      const overall = liveScores
+        ? Math.round(Object.values(liveScores).reduce((a,b)=>a+b,0) / Object.values(liveScores).length)
+        : null;
+
+      return (
+        <div>
+          <h2 className="module-title">🔴 Live Detection</h2>
+          <p className="module-subtitle">Real-time pose analysis and sport detection — no upload needed</p>
+
+          {/* Camera canvas */}
+          <div style={{
+            position:'relative', borderRadius:'16px', overflow:'hidden',
+            background:'#000', border:'1px solid var(--border)', marginBottom:'20px',
+            minHeight: status === 'idle' || status === 'error' ? '0' : '420px',
+            display:   status === 'idle' || status === 'error' ? 'none' : 'block'
+          }}>
+            <video ref={videoRef} autoPlay playsInline muted
+              style={{ position:'absolute', opacity:0, pointerEvents:'none', width:'1px', height:'1px' }} />
+            <canvas ref={canvasRef} style={{ width:'100%', display:'block', maxHeight:'560px', borderRadius:'16px' }} />
+            {status === 'loading' && (
+              <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(8,12,20,0.85)', flexDirection:'column', gap:'16px' }}>
+                <div className="spinner" />
+                <span style={{ color:'var(--primary)', fontWeight:'700' }}>Starting camera &amp; pose model…</span>
+              </div>
+            )}
+          </div>
+
+          {/* Idle */}
+          {status === 'idle' && (
+            <div style={{ textAlign:'center', padding:'40px 20px' }}>
+              <div style={{ fontSize:'72px', marginBottom:'16px' }}>🔴</div>
+              <h3 style={{ fontSize:'22px', fontWeight:'700', marginBottom:'8px' }}>Real-Time Sport Detection</h3>
+              <p style={{ color:'var(--text-dim)', marginBottom:'28px', maxWidth:'420px', margin:'0 auto 28px', lineHeight:'1.7' }}>
+                Point your camera at yourself performing any sport. SXA will detect your movements,
+                overlay a skeleton, and score your technique <strong style={{color:'var(--primary)'}}>live</strong>.
+              </p>
+              <button className="btn btn-primary" onClick={startLive} style={{ fontSize:'15px', padding:'14px 36px' }}>
+                📷 Start Live Detection
+              </button>
+              <div className="grid-2" style={{ marginTop:'28px' }}>
+                {[
+                  { icon:'⚡', title:'Instant Feedback',     desc:'Scores update every second as you move.' },
+                  { icon:'🦴', title:'Full Skeleton Overlay', desc:'See 33 body landmarks drawn live on camera.' },
+                  { icon:'🏅', title:'12 Sports Supported',  desc:'Running, basketball, soccer, yoga & more.' },
+                  { icon:'📊', title:'5 Metrics Tracked',    desc:'Form, Power, Consistency, Balance, Timing.' },
+                ].map(c => (
+                  <div key={c.title} className="insight-card">
+                    <div className="insight-icon">{c.icon}</div>
+                    <div className="insight-content">
+                      <div className="insight-title">{c.title}</div>
+                      <div className="insight-text">{c.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {status === 'error' && (
+            <div className="error-message">
+              <div className="error-icon">📷</div>
+              <div className="error-title">Camera Error</div>
+              <div className="error-text">{errMsg || 'Please allow camera permissions and try again.'}</div>
+              <button className="btn btn-primary" onClick={startLive} style={{ marginTop:'16px' }}>Try Again</button>
+            </div>
+          )}
+
+          {/* Stop button */}
+          {status === 'running' && (
+            <div style={{ display:'flex', justifyContent:'center', marginBottom:'20px' }}>
+              <button className="btn" onClick={stopLive}
+                style={{ background:'linear-gradient(135deg,#FF3D71,#CC1144)', color:'white', padding:'12px 32px', fontSize:'14px' }}>
+                ⏹ Stop Detection
+              </button>
+            </div>
+          )}
+
+          {/* Scores */}
+          {status === 'running' && (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px', marginBottom:'20px' }}>
+              <div className="metric-card" style={{ textAlign:'center' }}>
+                <div className="metric-label">Detected Sport</div>
+                {liveSport ? (
+                  <>
+                    <div style={{ fontSize:'36px', margin:'8px 0' }}>
+                      {SPORT_PATTERNS[Object.keys(SPORT_PATTERNS).find(k=>SPORT_PATTERNS[k].name===liveSport)]?.emoji || '🏅'}
+                    </div>
+                    <div style={{ fontWeight:'800', fontSize:'18px', color:'var(--primary)' }}>{liveSport}</div>
+                  </>
+                ) : (
+                  <div style={{ padding:'16px 0', color:'var(--text-dim)' }}>
+                    <div style={{ fontSize:'28px', marginBottom:'8px' }}>🔍</div>
+                    <div>Waiting for movement…</div>
+                  </div>
+                )}
+              </div>
+              <div className="metric-card" style={{ textAlign:'center' }}>
+                <div className="metric-label">Overall Score</div>
+                {overall !== null ? (
+                  <>
+                    <div className="metric-value" style={{ color:scoreColor(overall), fontSize:'52px' }}>{overall}</div>
+                    <div style={{ fontSize:'13px', color:'var(--text-dim)' }}>
+                      {overall >= 80 ? '🏆 Elite Form' : overall >= 65 ? '⭐ Good Technique' : '💪 Keep Training'}
+                    </div>
+                  </>
+                ) : <div className="spinner" style={{ margin:'16px auto' }} />}
+              </div>
+            </div>
+          )}
+
+          {/* Breakdown */}
+          {status === 'running' && liveScores && (
+            <div style={{ background:'var(--bg-2)', borderRadius:'14px', border:'1px solid var(--border)', padding:'20px', marginBottom:'20px' }}>
+              <div style={{ fontWeight:'700', fontSize:'15px', marginBottom:'16px' }}>📊 Live Breakdown</div>
+              {Object.entries(liveScores).map(([cat, val]) => (
+                <div key={cat} style={{ marginBottom:'14px' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'6px' }}>
+                    <span style={{ fontWeight:'600', fontSize:'13px', textTransform:'capitalize' }}>{cat}</span>
+                    <span style={{ fontWeight:'800', fontSize:'13px', color:scoreColor(val), fontFamily:'var(--font-mono)' }}>{val}/100</span>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-fill" style={{ width:`${val}%`, background: val>=80?'linear-gradient(90deg,#88CC00,#AAFF00)': val>=60?'linear-gradient(90deg,#CC8800,#FFB800)':'linear-gradient(90deg,#CC1144,#FF3D71)' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Live Metrics grid */}
+          {status === 'running' && liveMetrics && (
+            <div className="grid-3" style={{ marginBottom:'20px' }}>
+              {[
+                { label:'Knee Angle', value:`${liveMetrics.knee}°` },
+                { label:'Hip Angle',  value:`${liveMetrics.hip}°` },
+                { label:'Arm Angle',  value:`${liveMetrics.arm}°` },
+                { label:'Speed Index',value:liveMetrics.speed },
+                { label:'Balance',    value:`${liveMetrics.balance}%` },
+                { label:'FPS',        value:fps },
+              ].map(m => (
+                <div key={m.label} style={{ padding:'14px', background:'var(--bg-2)', borderRadius:'10px', border:'1px solid var(--border)', textAlign:'center' }}>
+                  <div style={{ fontSize:'11px', color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'1px' }}>{m.label}</div>
+                  <div style={{ fontSize:'22px', fontWeight:'800', color:'var(--primary)', margin:'4px 0' }}>{m.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Tips */}
+          {status === 'running' && !liveScores && (
+            <div style={{ background:'rgba(0,229,255,0.05)', border:'1px solid rgba(0,229,255,0.15)', borderRadius:'12px', padding:'20px' }}>
+              <div style={{ fontWeight:'700', marginBottom:'10px', color:'var(--primary)' }}>💡 Tips</div>
+              <ul style={{ marginLeft:'20px', color:'var(--text-dim)', lineHeight:'1.9', fontSize:'14px' }}>
+                <li>Stand 2–3 m from camera so your full body is visible</li>
+                <li>Face a bright light source for better pose detection</li>
+                <li>Perform clear athletic movements (jump, run in place, kick, swing)</li>
+              </ul>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── Video Analysis (API-backed) ────────────────────── */
+    function VideoAnalysis() {
+      const [file, setFile]       = useState(null);
+      const [sport, setSport]     = useState('auto');
+      const [status, setStatus]   = useState('idle');
+      const [result, setResult]   = useState(null);
+      const [error, setError]     = useState('');
+      const fileRef = useRef();
+
+      async function analyze() {
+        if (!file) return;
+        setStatus('loading');
+        setError('');
+        try {
+          const fd = new FormData();
+          fd.append('video', file);
+          fd.append('sport', sport);
+          const res  = await fetch(`${API_BASE}/analyze`, { method:'POST', body:fd });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Analysis failed');
+          setResult(data);
+          setStatus('done');
+        } catch (e) {
+          setError(e.message);
+          setStatus('error');
+        }
+      }
+
+      return (
+        <div>
+          <h2 className="module-title">📹 Video Analysis</h2>
+          <p className="module-subtitle">Upload a video for full frame-by-frame biomechanics analysis</p>
+
+          {/* Upload zone */}
+          <div className="upload-zone" onClick={() => fileRef.current.click()}>
+            <span className="upload-icon">🎬</span>
+            <p className="upload-text">{file ? file.name : 'Drop your video here or click to browse'}</p>
+            <p className="upload-hint">MP4 · MOV · AVI — max 100 MB</p>
+            <input ref={fileRef} type="file" accept="video/*" style={{display:'none'}} onChange={e => setFile(e.target.files[0])} />
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Sport (auto-detect or override)</label>
+              <select className="form-select" value={sport} onChange={e => setSport(e.target.value)}>
+                <option value="auto">🔍 Auto-detect</option>
+                {Object.entries(SPORT_PATTERNS).map(([k,v]) => (
+                  <option key={k} value={k}>{v.emoji} {v.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="button-group">
+            <button className="btn btn-primary" onClick={analyze} disabled={!file || status === 'loading'}>
+              {status === 'loading' ? <><div className="spinner" style={{width:'16px',height:'16px',borderWidth:'2px'}} /> Analyzing…</> : '⚡ Analyze Video'}
+            </button>
+            {file && <button className="btn btn-secondary" onClick={() => { setFile(null); setResult(null); setStatus('idle'); }}>✕ Clear</button>}
+          </div>
+
+          {status === 'error' && (
+            <div className="error-message" style={{ marginTop:'24px' }}>
+              <div className="error-icon">⚠️</div>
+              <div className="error-title">Analysis Failed</div>
+              <div className="error-text">{error}</div>
+            </div>
+          )}
+
+          {result && status === 'done' && (
+            <div style={{ marginTop:'32px' }}>
+              <div className="status-badge status-success">✓ ANALYSIS COMPLETE</div>
+              <div className="grid-2">
+                <div className="metric-card" style={{textAlign:'center'}}>
+                  <div className="metric-label">Sport Detected</div>
+                  <div style={{fontSize:'40px',margin:'8px 0'}}>{SPORT_PATTERNS[Object.keys(SPORT_PATTERNS).find(k=>SPORT_PATTERNS[k].name===result.sport)]?.emoji || '🏅'}</div>
+                  <div style={{fontWeight:'800',fontSize:'18px',color:'var(--primary)'}}>{result.sport}</div>
+                </div>
+                <div className="metric-card" style={{textAlign:'center'}}>
+                  <div className="metric-label">Overall Score</div>
+                  <div className="metric-value" style={{color:scoreColor(result.overall),fontSize:'56px'}}>{result.overall}</div>
+                  <div style={{fontSize:'13px',color:'var(--text-dim)'}}>{result.overall>=80?'🏆 Elite Form':result.overall>=65?'⭐ Good Technique':'💪 Needs Work'}</div>
+                </div>
+              </div>
+
+              {/* Score breakdown */}
+              {result.scores && (
+                <div style={{background:'var(--bg-2)',borderRadius:'14px',border:'1px solid var(--border)',padding:'24px',marginTop:'16px'}}>
+                  <div style={{fontWeight:'700',fontSize:'15px',marginBottom:'16px'}}>📊 Score Breakdown</div>
+                  {Object.entries(result.scores).map(([cat,val]) => (
+                    <div key={cat} style={{marginBottom:'14px'}}>
+                      <div style={{display:'flex',justifyContent:'space-between',marginBottom:'6px'}}>
+                        <span style={{fontWeight:'600',fontSize:'13px',textTransform:'capitalize'}}>{cat}</span>
+                        <span style={{fontWeight:'800',fontSize:'13px',color:scoreColor(val),fontFamily:'var(--font-mono)'}}>{val}/100</span>
+                      </div>
+                      <div className="progress-bar"><div className="progress-fill" style={{width:`${val}%`}} /></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* AI Insights */}
+              {result.insights && result.insights.length > 0 && (
+                <div style={{marginTop:'20px'}}>
+                  <div style={{fontWeight:'700',fontSize:'15px',marginBottom:'12px'}}>💡 Coaching Insights</div>
+                  {result.insights.map((ins,i) => (
+                    <div key={i} className="insight-card">
+                      <div className="insight-icon">💡</div>
+                      <div className="insight-content"><div className="insight-text">{ins}</div></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── Athlete Profile ────────────────────────────────── */
+    function AthleteProfile() {
+      const [form, setForm] = useState({ name:'', age:25, height:175, weight:70, sport:'sprinting', level:'recreational' });
+      const [saved, setSaved] = useState(false);
+
+      const bmi = form.height > 0 ? +(form.weight / ((form.height/100)**2)).toFixed(1) : 0;
+      const bmiLabel = bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Healthy' : bmi < 30 ? 'Overweight' : 'Obese';
+      const bmiPct   = Math.min(100, Math.max(0, ((bmi - 15) / 25) * 100));
+
+      function save() {
+        localStorage.setItem('sxa_profile', JSON.stringify(form));
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
+
+      const F = ({ label, field, type='number', min, max, step }) => (
+        <div className="form-group">
+          <label className="form-label">{label}</label>
+          <input type={type} className="form-input" value={form[field]}
+            min={min} max={max} step={step}
+            onChange={e => setForm(f => ({ ...f, [field]: type==='number' ? +e.target.value : e.target.value }))} />
+        </div>
+      );
+
+      return (
+        <div>
+          <h2 className="module-title">👤 Athlete Profile</h2>
+          <p className="module-subtitle">Your physical stats power the nutrition and injury engine</p>
+
+          <div className="form-grid">
+            <F label="Full Name"   field="name"   type="text" />
+            <F label="Age (yrs)"   field="age"    min={10} max={80} />
+            <F label="Height (cm)" field="height" min={100} max={250} />
+            <F label="Weight (kg)" field="weight" min={30}  max={200} step={0.5} />
+            <div className="form-group">
+              <label className="form-label">Primary Sport</label>
+              <select className="form-select" value={form.sport} onChange={e => setForm(f=>({...f,sport:e.target.value}))}>
+                {Object.entries(SPORT_PATTERNS).map(([k,v]) => <option key={k} value={k}>{v.emoji} {v.name}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Level</label>
+              <select className="form-select" value={form.level} onChange={e => setForm(f=>({...f,level:e.target.value}))}>
+                {['recreational','competitive','elite','professional'].map(l => <option key={l} value={l}>{l.charAt(0).toUpperCase()+l.slice(1)}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* BMI */}
+          {bmi > 0 && (
+            <div className="metric-card" style={{marginBottom:'24px'}}>
+              <div className="metric-label">Body Mass Index</div>
+              <div style={{display:'flex',alignItems:'baseline',gap:'12px',marginBottom:'12px'}}>
+                <div className="metric-value" style={{fontSize:'40px'}}>{bmi}</div>
+                <div style={{color:'var(--text-dim)',fontWeight:'600'}}>{bmiLabel}</div>
+              </div>
+              <div className="bmi-gauge">
+                <div className="bmi-needle" style={{left:`${bmiPct}%`}} />
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:'11px',color:'var(--text-muted)',marginTop:'4px',fontFamily:'var(--font-mono)'}}>
+                <span>15</span><span>18.5</span><span>25</span><span>30</span><span>40</span>
+              </div>
+            </div>
+          )}
+
+          <div className="button-group">
+            <button className="btn btn-primary" onClick={save}>{saved ? '✓ Saved!' : '💾 Save Profile'}</button>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── Nutrition Module ───────────────────────────────── */
+    function NutritionPlan() {
+      const MEAL_DATA = {
+        sprinting:   { calories:2800, protein:180, carbs:340, fat:65, meals:['Oat + egg white bowl','Chicken + rice + broccoli','Salmon + sweet potato','Protein shake + banana'] },
+        basketball:  { calories:3000, protein:165, carbs:380, fat:70, meals:['Greek yogurt parfait','Turkey wrap + avocado','Lean beef + quinoa','Cottage cheese + berries'] },
+        soccer:      { calories:2700, protein:155, carbs:360, fat:60, meals:['Banana + peanut butter toast','Pasta + tomato + tuna','Chicken stir fry + rice','Recovery smoothie'] },
+        running:     { calories:2600, protein:145, carbs:370, fat:55, meals:['Overnight oats + fruit','Tuna sandwich + salad','Lentil soup + bread','Almond butter + apple'] },
+        yoga:        { calories:2000, protein:120, carbs:250, fat:60, meals:['Acai bowl','Tofu + veggie stir fry','Chickpea salad','Green smoothie'] },
+        golf:        { calories:2400, protein:140, carbs:300, fat:65, meals:['Eggs + whole grain toast','Grilled chicken + salad','Salmon + veggies','Mixed nuts + fruit'] },
+      };
+      const data = MEAL_DATA[JSON.parse(localStorage.getItem('sxa_profile') || '{}').sport] || MEAL_DATA.running;
+
+      const macros = [
+        { label:'Daily Calories', value:`${data.calories} kcal`, color:'var(--primary)',  pill:null },
+        { label:'Protein',        value:`${data.protein}g`,      color:'#60A5FA',         pill:'pill-protein' },
+        { label:'Carbohydrates',  value:`${data.carbs}g`,        color:'#FFB800',         pill:'pill-carb' },
+        { label:'Fats',           value:`${data.fat}g`,          color:'#F472B6',         pill:'pill-fat' },
+      ];
+
+      return (
+        <div>
+          <h2 className="module-title">🥗 Nutrition Plan</h2>
+          <p className="module-subtitle">Macro targets and meal suggestions tuned to your sport</p>
+
+          <div className="grid-2">
+            {macros.map(m => (
+              <div key={m.label} className="metric-card">
+                <div className="metric-label">{m.label}</div>
+                <div className="metric-value" style={{fontSize:'34px',color:m.color}}>{m.value}</div>
+                {m.pill && <span className={`diet-pill ${m.pill}`}>{m.label.split(' ')[0].toUpperCase()}</span>}
+              </div>
+            ))}
+          </div>
+
+          <div className="section-divider" />
+          <div style={{fontWeight:'700',fontSize:'15px',marginBottom:'16px'}}>🍽️ Sample Meal Plan</div>
+          <div className="grid-2">
+            {data.meals.map((meal, i) => (
+              <div key={i} className="diet-card">
+                <div style={{fontWeight:'700',fontSize:'14px',marginBottom:'6px'}}>{['☀️ Breakfast','🌤 Lunch','🌙 Dinner','💪 Snack'][i]}</div>
+                <div style={{color:'var(--text-dim)',fontSize:'13px',lineHeight:'1.6'}}>{meal}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* ── Injury Risk ────────────────────────────────────── */
+    function InjuryRisk() {
+      const RISKS = {
+        sprinting: [
+          { area:'Hamstring', risk:'high',   note:'High-speed running strains posterior chain. Prioritize eccentric loading.' },
+          { area:'Achilles',  risk:'medium', note:'Rapid acceleration increases tendon stress. Calf mobility is key.' },
+          { area:'Hip Flexor',risk:'medium', note:'Overstriding can tighten hip flexors. Focus on stride length.' },
+        ],
+        basketball: [
+          { area:'ACL / Knee',  risk:'high',   note:'Lateral cuts and landings create shear force. Land with soft knees.' },
+          { area:'Ankle Sprain',risk:'high',   note:'High jump frequency on hardwood. Ankle stability training essential.' },
+          { area:'Lower Back',  risk:'medium', note:'Repeated jumping compresses lumbar spine. Core stability helps.' },
+        ],
+        soccer: [
+          { area:'Groin Strain',  risk:'high',   note:'Multi-directional running strains adductors. Hip strength vital.' },
+          { area:'ACL / Knee',    risk:'high',   note:'Cutting movements are primary ACL injury mechanism.' },
+          { area:'Ankle Ligament',risk:'medium', note:'Uneven turf surfaces increase sprain risk.' },
+        ],
+      };
+      const sport = JSON.parse(localStorage.getItem('sxa_profile') || '{}').sport || 'sprinting';
+      const risks = RISKS[sport] || RISKS.sprinting;
+      const riskColors = { high:'#EF4444', medium:'#F59E0B', low:'#10B981' };
+
+      return (
+        <div>
+          <h2 className="module-title">🦺 Injury Prevention</h2>
+          <p className="module-subtitle">Risk areas and prevention strategies for your sport</p>
+          {risks.map((r,i) => (
+            <div key={i} className={`injury-card injury-${r.risk}`}>
+              <div style={{fontSize:'28px'}}>{r.risk === 'high' ? '🔴' : r.risk === 'medium' ? '🟡' : '🟢'}</div>
+              <div style={{flex:1}}>
+                <div style={{display:'flex',gap:'10px',alignItems:'center',marginBottom:'6px'}}>
+                  <span style={{fontWeight:'800',fontSize:'15px'}}>{r.area}</span>
+                  <span style={{padding:'2px 10px',borderRadius:'100px',fontSize:'11px',fontWeight:'700',background:`${riskColors[r.risk]}22`,color:riskColors[r.risk],fontFamily:'var(--font-mono)',textTransform:'uppercase'}}>{r.risk}</span>
+                </div>
+                <div style={{color:'var(--text-dim)',fontSize:'13px',lineHeight:'1.6'}}>{r.note}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    /* ── Root App ───────────────────────────────────────── */
+    const TABS = [
+      { id:'live',      label:'🔴 Live Detection',  Component:LiveDetection  },
+      { id:'video',     label:'📹 Video Analysis',  Component:VideoAnalysis  },
+      { id:'profile',   label:'👤 Athlete Profile',  Component:AthleteProfile },
+      { id:'nutrition', label:'🥗 Nutrition',         Component:NutritionPlan  },
+      { id:'injury',    label:'🦺 Injury Risk',       Component:InjuryRisk     },
+    ];
+
+    function SXA() {
+      const [activeTab, setActiveTab] = useState('live');
+      const ActiveComponent = TABS.find(t => t.id === activeTab)?.Component || LiveDetection;
+      const liveActive = activeTab === 'live';
+
+      return (
+        <div className="app-container">
+          <Header liveActive={liveActive} />
+          <nav className="nav-tabs">
+            {TABS.map(t => (
+              <button key={t.id} className={`nav-tab${activeTab === t.id ? ' active' : ''}`}
+                onClick={() => setActiveTab(t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </nav>
+          <main className="content-card">
+            <ActiveComponent />
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<SXA />);
+  </script>
+</body>
+</html>
